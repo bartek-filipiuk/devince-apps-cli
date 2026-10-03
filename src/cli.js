@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 // devince-apps: install what you bought on apps.devince.dev into Claude Code.
 //   npx devince-apps install <link from the e-mail>
-//   npx devince-apps buy security-audit
+//   npx devince-apps buy security-audit        (add --agree when there is no terminal to answer in)
+//   npx devince-apps claim <session id>
 //   npx devince-apps status
 import { createInterface } from "node:readline/promises";
 import { existsSync, readFileSync } from "node:fs";
@@ -19,9 +20,11 @@ function usage() {
 
   install <link>   download the product behind an e-mail link and put it in ${claudeHome()}/skills
   buy <product>    open the checkout, wait for the payment, then install (${Object.keys(PRODUCTS).join(", ")})
+  claim <session>  finish a purchase started with buy (the id is printed by buy)
   status           list what is installed
 
-  options: --force   replace a symlinked destination (developer checkouts)`);
+  options: --agree   accept the digital-content consent printed by buy, for non-interactive runs
+           --force   replace a symlinked destination (developer checkouts)`);
 }
 
 async function install(input, { force }) {
@@ -46,23 +49,46 @@ function openBrowser(url) {
   try { spawn(cmd[0], cmd[1], { stdio: "ignore", detached: true }).unref(); return true; } catch { return false; }
 }
 
-async function buy(name, { force }) {
+const SESSION_ID_RE = /^cs_(?:live|test)_[A-Za-z0-9]{10,200}$/;
+const interactive = () => Boolean(process.stdin.isTTY && process.stdout.isTTY);
+
+/** Non-interactive runs (Claude Code's `!`, CI, pipes) get a short wait and a `claim` command to finish later. */
+async function finish(sessionId, { force }) {
+  const tty = interactive();
+  const token = await waitForGrant(sessionId, tty ? { onTick: () => process.stdout.write(".") } : { intervalMs: 12_000, timeoutMs: 70_000 });
+  if (tty) out();
+  if (!token) {
+    out(tty
+      ? "No payment seen in 20 minutes. If you did pay, use the link from the e-mail: npx devince-apps install <link>"
+      : `Payment not confirmed yet. After paying, run:\n  npx devince-apps claim ${sessionId}\nThe download link also arrives by e-mail: npx devince-apps install <link>`);
+    return 3;
+  }
+  await install(token, { force });
+  return 0;
+}
+
+async function buy(name, { force, agree }) {
   const slug = PRODUCTS[name] ?? name;
-  const rl = createInterface({ input: process.stdin, output: process.stdout });
-  try {
-    out(`Product: https://apps.devince.dev/${slug}\n\n${CONSENT}\n`);
-    const answer = (await rl.question("Do you agree? Type yes to continue: ")).trim().toLowerCase();
-    if (answer !== "yes" && answer !== "tak") { out("Stopped; nothing was bought."); return 2; }
-  } finally { rl.close(); }
+  out(`Product: https://apps.devince.dev/${slug}\n\n${CONSENT}\n`);
+  if (!agree) {
+    if (!interactive()) { out(`Not a terminal, so I cannot ask. If you agree, run:\n  npx devince-apps buy ${name} --agree`); return 2; }
+    const rl = createInterface({ input: process.stdin, output: process.stdout });
+    try {
+      const answer = (await rl.question("Do you agree? Type yes to continue: ")).trim().toLowerCase();
+      if (answer !== "yes" && answer !== "tak") { out("Stopped; nothing was bought."); return 2; }
+    } finally { rl.close(); }
+  }
   const { url, sessionId } = await createCheckout({ slug, consent: true });
   out(`\nOpening the payment page. If no browser appears, open this link:\n${url}\n`);
   openBrowser(url);
-  out("Waiting for the payment (up to 20 minutes). The download link also goes to your e-mail.");
-  const token = await waitForGrant(sessionId, { onTick: () => process.stdout.write(".") });
-  out();
-  if (!token) { out("No payment seen in 20 minutes. If you did pay, use the link from the e-mail: npx devince-apps install <link>"); return 3; }
-  await install(token, { force });
-  return 0;
+  out(interactive() ? "Waiting for the payment (up to 20 minutes). The download link also goes to your e-mail." : "Waiting about a minute for the payment.");
+  return finish(sessionId, { force });
+}
+
+async function claim(sessionId, { force }) {
+  if (!SESSION_ID_RE.test(sessionId)) { out("Error: that is not a checkout session id (cs_live_…)"); return 1; }
+  out("Checking the payment…");
+  return finish(sessionId, { force });
 }
 
 function status() {
@@ -74,10 +100,12 @@ function status() {
 
 const args = process.argv.slice(2);
 const force = args.includes("--force");
+const agree = args.includes("--agree");
 const [cmd, arg] = args.filter((a) => !a.startsWith("--"));
 try {
   if (cmd === "install" && arg) await install(arg, { force });
-  else if (cmd === "buy" && arg) process.exitCode = await buy(arg, { force });
+  else if (cmd === "buy" && arg) process.exitCode = await buy(arg, { force, agree });
+  else if (cmd === "claim" && arg) process.exitCode = await claim(arg, { force });
   else if (cmd === "status") status();
   else { usage(); process.exitCode = cmd ? 1 : 0; }
 } catch (e) {
