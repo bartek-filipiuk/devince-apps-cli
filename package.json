@@ -1,0 +1,13 @@
+{
+  "name": "@devince/apps",
+  "version": "0.1.0",
+  "description": "Installs products bought on apps.devince.dev into Claude Code with one command",
+  "type": "module",
+  "bin": { "devince-apps": "./src/cli.js" },
+  "files": ["src", "README.md", "LICENSE"],
+  "engines": { "node": ">=20" },
+  "scripts": { "test": "node --test test/" },
+  "repository": { "type": "git", "url": "https://github.com/bartek-filipiuk/devince-apps-cli" },
+  "license": "MIT",
+  "publishConfig": { "access": "public" }
+}
