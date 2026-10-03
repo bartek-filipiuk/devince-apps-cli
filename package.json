@@ -1,6 +1,6 @@
 {
   "name": "devince-apps",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Installs products bought on apps.devince.dev into Claude Code with one command",
   "type": "module",
   "bin": {

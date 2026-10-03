@@ -5,7 +5,9 @@
 //   npx devince-apps claim <session id>
 //   npx devince-apps status
 import { createInterface } from "node:readline/promises";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
+import { tmpdir } from "node:os";
 import { spawn } from "node:child_process";
 import { downloadUrlFrom, downloadArchive, maskToken, createCheckout, waitForGrant, PRODUCTS, StoreError } from "./store.js";
 import { inspectArchive, installArchive, readRegistry, claudeHome, InstallError } from "./install.js";
@@ -29,8 +31,9 @@ function usage() {
 
 async function install(input, { force }) {
   let buf;
-  if (/\.zip$/i.test(input) && existsSync(input)) {
-    buf = readFileSync(input); // a local archive, for testing a package before it is uploaded
+  const local = /\.zip$/i.test(input) && existsSync(input);
+  if (local) {
+    buf = readFileSync(input); // a local archive: a kept download, or a package under test
   } else {
     const url = downloadUrlFrom(input);
     out(`Downloading ${maskToken(url)}`);
@@ -39,7 +42,19 @@ async function install(input, { force }) {
   const inspected = inspectArchive(buf);
   const { manifest } = inspected;
   out(`Verified archive: ${manifest.product} ${manifest.version}, ${inspected.files.length} files`);
-  const placed = installArchive(inspected, { force });
+  let placed;
+  try {
+    placed = installArchive(inspected, { force });
+  } catch (e) {
+    // The download is already spent (links allow 5 uses): keep the verified archive so the user
+    // can finish from it instead of downloading again.
+    if (e instanceof InstallError && !local) {
+      const kept = join(tmpdir(), `devince-apps-${manifest.product}-${manifest.version}.zip`);
+      writeFileSync(kept, buf, { mode: 0o600 });
+      e.message += `\nThe archive is kept at ${kept}. Finish with:\n  npx devince-apps install ${kept}${force ? "" : " --force"}`;
+    }
+    throw e;
+  }
   for (const p of placed) out(`  ${p.path}${p.backup ? `  (previous copy moved to ${p.backup})` : ""}`);
   out(`\nDone. In Claude Code, type /${manifest.product}. A running session needs a restart to see new skills.`);
 }
