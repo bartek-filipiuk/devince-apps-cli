@@ -21,7 +21,7 @@ function usage() {
   out(`devince-apps
 
   install <link>   download the product behind an e-mail link and put it in ${claudeHome()}/skills
-  buy <product>    open the checkout, wait for the payment, then install (${Object.keys(PRODUCTS).join(", ")})
+  buy <product>    open the checkout, wait for the payment, then install (product = store slug${Object.keys(PRODUCTS).length ? " or " + Object.keys(PRODUCTS).join(", ") : ""})
   claim <session>  finish a purchase started with buy (the id is printed by buy)
   status           list what is installed
 
