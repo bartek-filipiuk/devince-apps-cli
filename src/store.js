@@ -9,9 +9,7 @@ const TOKEN_RE = /^[A-Za-z0-9_-]{8,128}\.[0-9a-f]{16,128}$/;
 const SESSION_RE = /cs_(?:live|test)_[A-Za-z0-9]{10,200}/;
 
 // Product aliases for `buy`: short name on the left, store slug on the right.
-export const PRODUCTS = {
-  "security-audit": "security-audit-skill-do-claude-code",
-};
+export const PRODUCTS = {};
 
 export class StoreError extends Error {}
 

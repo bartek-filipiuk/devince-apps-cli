@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // devince-apps: install what you bought on apps.devince.dev into Claude Code.
 //   npx devince-apps install <link from the e-mail>
-//   npx devince-apps buy security-audit        (add --agree when there is no terminal to answer in)
+//   npx devince-apps buy <product>        (add --agree when there is no terminal to answer in)
 //   npx devince-apps claim <session id>
 //   npx devince-apps status
 import { createInterface } from "node:readline/promises";

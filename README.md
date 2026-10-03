@@ -4,14 +4,14 @@ Installs what you bought on [apps.devince.dev](https://apps.devince.dev) into Cl
 
 ```bash
 npx devince-apps install <link from the e-mail>   # downloads, verifies, places the files
-npx devince-apps buy security-audit               # checkout in the browser, then install
+npx devince-apps buy <product>               # checkout in the browser, then install
 npx devince-apps claim <session id>               # finish a purchase started with buy
 npx devince-apps status                           # what is installed
 ```
 
 ### From inside Claude Code
 
-Type `! npx devince-apps buy security-audit --agree` at the Claude Code prompt (the `!` runs a shell
+Type `! npx devince-apps buy <product> --agree` at the Claude Code prompt (the `!` runs a shell
 command). There is no terminal to answer a question in, so `--agree` stands for the consent that
 `buy` prints. The payment page opens in your browser; the command waits about a minute, and if the
 payment is not in yet it prints `npx devince-apps claim <session id>` to finish with. The download
