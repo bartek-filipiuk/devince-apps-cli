@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 // devince-apps: install what you bought on apps.devince.dev into Claude Code.
-//   npx @devince/apps install <link from the e-mail>
-//   npx @devince/apps buy security-audit
-//   npx @devince/apps status
+//   npx devince-apps install <link from the e-mail>
+//   npx devince-apps buy security-audit
+//   npx devince-apps status
 import { createInterface } from "node:readline/promises";
 import { existsSync, readFileSync } from "node:fs";
 import { spawn } from "node:child_process";
@@ -60,7 +60,7 @@ async function buy(name, { force }) {
   out("Waiting for the payment (up to 20 minutes). The download link also goes to your e-mail.");
   const token = await waitForGrant(sessionId, { onTick: () => process.stdout.write(".") });
   out();
-  if (!token) { out("No payment seen in 20 minutes. If you did pay, use the link from the e-mail: npx @devince/apps install <link>"); return 3; }
+  if (!token) { out("No payment seen in 20 minutes. If you did pay, use the link from the e-mail: npx devince-apps install <link>"); return 3; }
   await install(token, { force });
   return 0;
 }

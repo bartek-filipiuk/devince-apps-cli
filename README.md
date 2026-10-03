@@ -1,11 +1,11 @@
-# @devince/apps
+# devince-apps
 
 Installs what you bought on [apps.devince.dev](https://apps.devince.dev) into Claude Code with one command.
 
 ```bash
-npx @devince/apps install <link from the e-mail>   # downloads, verifies, places the files
-npx @devince/apps buy security-audit               # checkout in the browser, then install
-npx @devince/apps status                           # what is installed
+npx devince-apps install <link from the e-mail>   # downloads, verifies, places the files
+npx devince-apps buy security-audit               # checkout in the browser, then install
+npx devince-apps status                           # what is installed
 ```
 
 Files go to `~/.claude/skills/<name>`. A previous copy is moved to `~/.claude/skills/.devince-backup/`, never deleted.
