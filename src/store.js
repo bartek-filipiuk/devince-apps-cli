@@ -61,7 +61,7 @@ async function readCapped(res, max = MAX_BODY) {
   return Buffer.concat(chunks);
 }
 
-/** Downloads the archive behind a grant. 403 means the link is invalid, expired or used up. */
+/** Downloads the archive behind a grant, with the file name the store suggests. 403 means the link is invalid, expired or used up. */
 export async function downloadArchive(url) {
   const res = await request(url, { headers: { accept: "application/zip, application/octet-stream" }, timeoutMs: 120_000 });
   if (res.status === 403) throw new StoreError("the store refused this link: it is invalid, expired (7 days) or used up (5 downloads). Ask for a new one.");
@@ -69,7 +69,8 @@ export async function downloadArchive(url) {
   if (!res.ok) throw new StoreError(`store answered ${res.status}`);
   const type = res.headers.get("content-type") ?? "";
   if (!/zip|octet-stream/.test(type)) throw new StoreError(`expected a zip, got ${type || "no content type"}`);
-  return readCapped(res);
+  const filename = /filename="([^"]*)"/i.exec(res.headers.get("content-disposition") ?? "")?.[1];
+  return { data: await readCapped(res), filename };
 }
 
 /** Creates a checkout session. `consent` must be the buyer's explicit yes, recorded by the caller. */

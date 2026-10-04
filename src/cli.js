@@ -10,7 +10,7 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { spawn } from "node:child_process";
 import { downloadUrlFrom, downloadArchive, maskToken, createCheckout, waitForGrant, PRODUCTS, StoreError } from "./store.js";
-import { inspectArchive, installArchive, readRegistry, claudeHome, InstallError } from "./install.js";
+import { inspectArchive, installArchive, saveArchive, readRegistry, claudeHome, InstallError, NotASkillError } from "./install.js";
 import { ZipError } from "./zip.js";
 
 const CONSENT = "Wyrażam zgodę na natychmiastowe rozpoczęcie dostarczania treści cyfrowej (pobranie pliku) i przyjmuję do wiadomości, że z chwilą wykonania umowy (udostępnienia pliku) tracę prawo odstąpienia od umowy. Regulamin: https://devince.dev/regulamin";
@@ -21,6 +21,7 @@ function usage() {
   out(`devince-apps
 
   install <link>   download the product behind an e-mail link and put it in ${claudeHome()}/skills
+                   (a project, like a starter, is saved as a zip in the current folder instead)
   buy <product>    open the checkout, wait for the payment, then install (product = store slug${Object.keys(PRODUCTS).length ? " or " + Object.keys(PRODUCTS).join(", ") : ""})
   claim <session>  finish a purchase started with buy (the id is printed by buy)
   status           list what is installed
@@ -30,16 +31,27 @@ function usage() {
 }
 
 async function install(input, { force }) {
-  let buf;
+  let buf, filename;
   const local = /\.zip$/i.test(input) && existsSync(input);
   if (local) {
     buf = readFileSync(input); // a local archive: a kept download, or a package under test
   } else {
     const url = downloadUrlFrom(input);
     out(`Downloading ${maskToken(url)}`);
-    buf = await downloadArchive(url);
+    ({ data: buf, filename } = await downloadArchive(url));
   }
-  const inspected = inspectArchive(buf);
+  let inspected;
+  try {
+    inspected = inspectArchive(buf);
+  } catch (e) {
+    // A project archive has nothing to place in skills. The download is spent, so hand over the file.
+    if (!(e instanceof NotASkillError) || local) throw e;
+    const saved = saveArchive(buf, filename);
+    out(`This product is a project, not a Claude Code skill, so nothing goes into ${claudeHome()}/skills.`);
+    out(`Saved: ${saved}`);
+    out(`Unzip it where you keep your projects${e.readme ? ` and open ${e.readme}` : ""}.`);
+    return;
+  }
   const { manifest } = inspected;
   out(`Verified archive: ${manifest.product} ${manifest.version}, ${inspected.files.length} files`);
   let placed;

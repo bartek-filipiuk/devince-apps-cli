@@ -4,8 +4,8 @@ import { mkdtempSync, mkdirSync, symlinkSync, existsSync, readFileSync, readdirS
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { readZip, ZipError, safeEntryName } from "../src/zip.js";
-import { inspectArchive, installArchive, parseManifest, InstallError, readRegistry } from "../src/install.js";
-import { downloadUrlFrom, StoreError, waitForGrant, maskToken } from "../src/store.js";
+import { inspectArchive, installArchive, parseManifest, InstallError, readRegistry, NotASkillError, archiveFileName, saveArchive } from "../src/install.js";
+import { downloadUrlFrom, StoreError, waitForGrant, maskToken, downloadArchive } from "../src/store.js";
 import { buildZip, productZip, manifest } from "./zipwriter.js";
 
 const home = () => { const d = mkdtempSync(join(tmpdir(), "devince-apps-")); process.env.DEVINCE_APPS_HOME = d; return d; };
@@ -89,5 +89,30 @@ test("waitForGrant polls, tolerates 429 and gives up on time", async () => {
     n = -1000;
     const none = await waitForGrant("cs_test_abcdefghijklmnop", { intervalMs: 1, timeoutMs: 5, sleep: async () => {} });
     assert.equal(none, null);
+  } finally { globalThis.fetch = realFetch; }
+});
+
+test("a project archive (no manifest) is recognised and saved next to the buyer, never over a file", async () => {
+  const zip = buildZip([{ name: "page-boilerplate/" }, { name: "page-boilerplate/README.md", data: "r" }, { name: "page-boilerplate/START.md", data: "s" }]);
+  const err = (() => { try { inspectArchive(zip); } catch (e) { return e; } })();
+  assert.ok(err instanceof NotASkillError);
+  assert.equal(err.readme, "page-boilerplate/START.md");
+
+  for (const [given, want] of [["starter-v11.zip", "starter-v11.zip"], ["../../.bashrc.zip", "bashrc.zip"], ["a\\b c.zip", "a_b_c.zip"], ["x.sh", "devince-download.zip"], [undefined, "devince-download.zip"]]) {
+    assert.equal(archiveFileName(given), want, String(given));
+  }
+  const dir = mkdtempSync(join(tmpdir(), "devince-apps-save-"));
+  const first = saveArchive(zip, "../starter-v11.zip", dir);
+  const second = saveArchive(Buffer.from("other"), "starter-v11.zip", dir);
+  assert.equal(first, join(dir, "starter-v11.zip"));
+  assert.equal(second, join(dir, "starter-v11-1.zip"));
+  assert.deepEqual(readFileSync(first), zip, "first copy untouched");
+
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = async () => new Response(zip, { status: 200, headers: { "content-type": "application/zip", "content-disposition": 'attachment; filename="starter-strona-firmowa-v11.zip"' } });
+  try {
+    const got = await downloadArchive("https://apps.devince.dev/api/apps/download/abcdefghij.0123456789abcdef0123");
+    assert.equal(got.filename, "starter-strona-firmowa-v11.zip");
+    assert.deepEqual(got.data, zip);
   } finally { globalThis.fetch = realFetch; }
 });

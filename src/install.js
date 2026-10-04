@@ -4,11 +4,20 @@
 // are left alone unless --force (a developer's checkout usually lives behind one).
 import { mkdirSync, writeFileSync, existsSync, lstatSync, renameSync, readFileSync, rmSync } from "node:fs";
 import { join, resolve, sep, dirname } from "node:path";
-import { homedir } from "node:os";
+import { homedir, tmpdir } from "node:os";
 import { randomBytes } from "node:crypto";
 import { readZip, safeEntryName } from "./zip.js";
 
 export class InstallError extends Error {}
+
+/** The archive is a project (a starter, a template), not skills: nothing to place, the buyer unzips it. */
+export class NotASkillError extends InstallError {
+  constructor(entries) {
+    super("the archive has no devince-install.json; it is not a product from apps.devince.dev");
+    const files = entries.filter((e) => !e.dir).map((e) => e.name);
+    this.readme = files.find((n) => /^([^/]+\/)?START\.md$/i.test(n)) ?? files.find((n) => /^([^/]+\/)?README\.md$/i.test(n));
+  }
+}
 
 export const claudeHome = () => process.env.DEVINCE_APPS_HOME || join(homedir(), ".claude");
 const NAME_RE = /^[a-z0-9][a-z0-9-]{0,39}$/;
@@ -39,7 +48,7 @@ export function inspectArchive(buf) {
   const entries = readZip(buf);
   const manifestEntry = entries.find((e) => !e.dir && e.name === "devince-install.json")
     ?? entries.find((e) => !e.dir && /^[^/]+\/devince-install\.json$/.test(e.name));
-  if (!manifestEntry) throw new InstallError("the archive has no devince-install.json; it is not a product from apps.devince.dev");
+  if (!manifestEntry) throw new NotASkillError(entries);
   // `from` paths in the manifest are relative to the archive root, wherever the manifest sits.
   const manifest = parseManifest(manifestEntry.data.toString("utf8"));
   const files = entries.filter((e) => !e.dir).map((e) => ({ name: e.name, data: e.data }));
@@ -94,6 +103,26 @@ export function installArchive({ manifest, files }, { force = false, now = new D
   }
   recordInstall(manifest, placed, now);
   return placed;
+}
+
+/** Store-suggested name reduced to a plain file name; anything that is not a .zip gets a fixed name. */
+export function archiveFileName(suggested) {
+  const base = String(suggested ?? "").split("/").pop().replace(/[^A-Za-z0-9._-]/g, "_").replace(/^\.+/, "").slice(0, 100);
+  return /\.zip$/i.test(base) ? base : "devince-download.zip";
+}
+
+/** Saves a downloaded project archive into `dir` (temp dir if `dir` is not writable), never over an existing file. */
+export function saveArchive(buf, suggested, dir = process.cwd()) {
+  const name = archiveFileName(suggested);
+  let lastError;
+  for (const d of [dir, tmpdir()]) {
+    for (let i = 0; i < 100; i++) {
+      const path = resolve(d, i ? name.replace(/\.zip$/i, `-${i}.zip`) : name);
+      try { writeFileSync(path, buf, { flag: "wx" }); return path; }
+      catch (e) { lastError = e; if (e.code !== "EEXIST") break; }
+    }
+  }
+  throw new InstallError(`could not save ${name}: ${lastError?.message}`);
 }
 
 function isLink(p) { try { return lstatSync(p).isSymbolicLink(); } catch { return false; } }

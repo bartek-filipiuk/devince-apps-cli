@@ -27,6 +27,9 @@ Files go to `~/.claude/skills/<name>`. A previous copy is moved to `~/.claude/sk
   extracted size over the cap are refused. The archive is never passed to a shell or an unzip binary.
 - The archive must carry `devince-install.json` naming the product and the folders to place.
   Destinations are confined to `~/.claude/skills/<name>`.
+- An archive without `devince-install.json` is a project (a starter, a template), not skills. Nothing
+  is installed; the downloaded zip is saved in the current folder (temp directory if that is not
+  writable) under the store's file name, never over an existing file, and its `START.md` is named.
 - A symlinked destination is left alone unless you pass `--force`. When an install is refused after a
   download, the verified archive is kept in the temp directory and the command to finish from it is
   printed, so the download link is not spent again.
